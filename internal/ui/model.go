@@ -33,6 +33,10 @@ type playerMsg struct {
 	running bool
 	err     error
 }
+type likeMsg struct {
+	result api.LikeResult
+	err    error
+}
 
 type Model struct {
 	client      *api.Client
@@ -81,6 +85,20 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.adjustVolume(-5)
 		case "m":
 			return m, m.toggleMute()
+		case "l":
+			track, _, _ := m.displayTrack()
+			switch {
+			case !m.snapshot.LikeOK || !m.snapshot.Like.Enabled:
+				m.lastError = "Likes are not available on this station"
+			case track == nil || track.ID == "":
+				m.lastError = "Nothing likeable is audible right now"
+			case m.snapshot.Like.SongID != track.ID:
+				m.lastError = "Like will be available when the buffered track reaches the live edge"
+			case m.snapshot.Like.Liked:
+				m.lastError = ""
+			default:
+				return m, m.likeTrack(track.ID)
+			}
 		case "r":
 			m.player.Stop()
 			return m, m.startPlayer()
@@ -96,6 +114,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if !incoming.SessionOK && m.initialized {
 			incoming.Session = m.snapshot.Session
 		}
+		if !incoming.LikeOK && m.initialized {
+			incoming.Like = m.snapshot.Like
+		}
 		m.snapshot = incoming
 		m.initialized = true
 		if mount := m.snapshot.NowPlaying.Stream.Mount; mount != "" {
@@ -110,6 +131,19 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if message.err != nil {
 			m.lastError = message.err.Error()
 		}
+	case likeMsg:
+		if message.err != nil {
+			m.lastError = message.err.Error()
+			break
+		}
+		m.snapshot.Like = api.LikeStatus{
+			Enabled: true,
+			SongID:  message.result.SongID,
+			Liked:   message.result.Liked,
+			Count:   message.result.Count,
+		}
+		m.snapshot.LikeOK = true
+		m.lastError = ""
 	case clockMsg:
 		m.ticks++
 		commands := []tea.Cmd{tick()}
@@ -201,6 +235,15 @@ func (m Model) toggleMute() tea.Cmd {
 	}
 }
 
+func (m Model) likeTrack(songID string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+		defer cancel()
+		result, err := m.client.LikeCurrent(ctx, songID)
+		return likeMsg{result: result, err: err}
+	}
+}
+
 func (m Model) renderHeader(width int) string {
 	np := m.snapshot.NowPlaying
 	status := lipgloss.NewStyle().Foreground(bad).Render("OFF AIR")
@@ -257,8 +300,19 @@ func (m Model) renderNowPlaying(width int) string {
 		body += fmt.Sprintf("  %s / %s", clock(elapsed), clock(time.Duration(duration*float64(time.Second))))
 	}
 	meta := m.trackMeta(track)
-	if meta != "" {
-		body += "\n" + dimStyle.Render(meta)
+	like := m.likeLabel(track)
+	if meta != "" || like != "" {
+		body += "\n"
+		if like != "" {
+			meta = truncate(meta, width-lipgloss.Width(like)-8)
+		}
+		if meta != "" {
+			body += dimStyle.Render(meta)
+		}
+		if meta != "" && like != "" {
+			body += "  "
+		}
+		body += like
 	}
 	return panel("NOW PLAYING", body, width)
 }
@@ -360,13 +414,26 @@ func (m Model) renderFooter(width int) string {
 	if status.Muted {
 		play += " · muted"
 	}
-	left := fmt.Sprintf("SPACE %s  +/− volume  M mute  R reconnect  Q quit", play)
+	left := fmt.Sprintf("SPACE %s  L like  +/− volume  M mute  R reconnect  Q quit", play)
 	right := fmt.Sprintf("%d%% · %s", status.Volume, m.snapshot.NowPlaying.Stream.Format)
-	gap := width - len(left) - len(right)
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return dimStyle.Render(left)
 	}
 	return dimStyle.Render(left + strings.Repeat(" ", gap) + right)
+}
+
+func (m Model) likeLabel(track *api.Track) string {
+	if !m.snapshot.LikeOK || !m.snapshot.Like.Enabled || track == nil || track.ID == "" {
+		return ""
+	}
+	if m.snapshot.Like.SongID != track.ID {
+		return dimStyle.Render("♡ syncing")
+	}
+	if m.snapshot.Like.Liked {
+		return lipgloss.NewStyle().Bold(true).Foreground(accent).Render(fmt.Sprintf("♥ %d", m.snapshot.Like.Count))
+	}
+	return lipgloss.NewStyle().Foreground(accent).Render(fmt.Sprintf("♡ %d", m.snapshot.Like.Count))
 }
 
 func (m Model) displayTrack() (*api.Track, time.Time, float64) {

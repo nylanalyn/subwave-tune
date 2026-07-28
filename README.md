@@ -34,6 +34,7 @@ The default station URL is `http://localhost:7700`. A positional URL,
 | Key | Action |
 | --- | --- |
 | `Space` | Connect or disconnect playback |
+| `l` | Like the audible track |
 | `+` / `-` | Raise or lower volume |
 | `m` | Mute |
 | `r` | Drop the current stream and reconnect at the live edge |
@@ -74,6 +75,7 @@ The client polls SUB/WAVE's public listener API:
 - `/api/now-playing` for the track, DJ, show, listeners and stream descriptor
 - `/api/state` for the queue and recent history
 - `/api/session` for spoken links and DJ selection reasoning
+- `/api/like` for listener-specific like state and likes
 
 Audio is played directly from the advertised Icecast mount. Displayed track
 and Booth changes are shifted by the station's advertised listener-buffer

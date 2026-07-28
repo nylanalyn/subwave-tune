@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -63,7 +64,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) Snapshot {
 	}
 	results := make(chan result, 3)
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 
 	go func() {
 		defer wg.Done()
@@ -84,6 +85,10 @@ func (c *Client) FetchSnapshot(ctx context.Context) Snapshot {
 		results <- result{"session", err}
 	}()
 	go func() {
+		defer wg.Done()
+		snapshot.LikeOK = c.get(ctx, "/like", &snapshot.Like) == nil
+	}()
+	go func() {
 		wg.Wait()
 		close(results)
 	}()
@@ -94,6 +99,38 @@ func (c *Client) FetchSnapshot(ctx context.Context) Snapshot {
 		}
 	}
 	return snapshot
+}
+
+func (c *Client) LikeCurrent(ctx context.Context, songID string) (LikeResult, error) {
+	var result LikeResult
+	body, err := json.Marshal(map[string]string{"songId": songID})
+	if err != nil {
+		return result, err
+	}
+	u := *c.base
+	u.Path = path.Join(c.base.Path, "/api/like")
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return result, err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", "subwave-tune/dev")
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return result, err
+	}
+	defer response.Body.Close()
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return result, fmt.Errorf("decode like response: %w", err)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if result.Error != "" {
+			return result, fmt.Errorf("%s", result.Error)
+		}
+		return result, fmt.Errorf("like request: %s", response.Status)
+	}
+	return result, nil
 }
 
 func (c *Client) get(ctx context.Context, endpoint string, target any) error {

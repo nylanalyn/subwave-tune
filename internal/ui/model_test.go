@@ -35,3 +35,18 @@ func TestWrap(t *testing.T) {
 		t.Fatalf("expected wrapped text, got %q", got)
 	}
 }
+
+func TestLikeLabelRequiresDisplayedTrackMatch(t *testing.T) {
+	model := Model{
+		snapshot: api.Snapshot{
+			LikeOK: true,
+			Like:   api.LikeStatus{Enabled: true, SongID: "live", Count: 2},
+		},
+	}
+	if got := model.likeLabel(&api.Track{ID: "buffered"}); !strings.Contains(got, "syncing") {
+		t.Fatalf("likeLabel() = %q", got)
+	}
+	if got := model.likeLabel(&api.Track{ID: "live"}); !strings.Contains(got, "♡ 2") {
+		t.Fatalf("likeLabel() = %q", got)
+	}
+}

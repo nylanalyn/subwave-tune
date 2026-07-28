@@ -132,13 +132,31 @@ type SessionResponse struct {
 	Messages []SessionTurn  `json:"messages"`
 }
 
+type LikeStatus struct {
+	Enabled bool   `json:"enabled"`
+	SongID  string `json:"songId"`
+	Liked   bool   `json:"liked"`
+	Count   int    `json:"count"`
+}
+
+type LikeResult struct {
+	OK           bool   `json:"ok"`
+	SongID       string `json:"songId"`
+	Liked        bool   `json:"liked"`
+	AlreadyLiked bool   `json:"alreadyLiked"`
+	Count        int    `json:"count"`
+	Error        string `json:"error"`
+}
+
 type Snapshot struct {
 	NowPlaying   NowPlayingResponse
 	State        StateResponse
 	Session      SessionResponse
+	Like         LikeStatus
 	FetchedAt    time.Time
 	Warnings     []string
 	NowPlayingOK bool
 	StateOK      bool
 	SessionOK    bool
+	LikeOK       bool
 }
