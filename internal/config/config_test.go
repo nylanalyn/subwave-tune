@@ -25,7 +25,9 @@ func TestParsePrecedence(t *testing.T) {
 func TestParsePositionalURL(t *testing.T) {
 	t.Setenv("SUBWAVE_TUNE_URL", "")
 	t.Setenv("SUBWAVE_TUNE_PASSWORD", "")
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	temp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", temp)
+	t.Setenv("AppData", temp)
 	cfg, err := Parse([]string{"radio.example"})
 	if err != nil {
 		t.Fatal(err)

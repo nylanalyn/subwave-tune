@@ -10,20 +10,34 @@ code or need access to a station's filesystem or admin API.
 ## Requirements
 
 - Go 1.24 or newer to build
-- `mpv` available in `PATH`
+- `mpv` available in `PATH` (`mpv` / `mpv.exe` on Windows; install via winget, scoop, or chocolatey)
 - A reachable SUB/WAVE station
+- On Windows, a VT-capable console such as Windows Terminal for the TUI
 
 ## Build and run
+
+Linux / macOS:
 
 ```bash
 go build -o bin/subwave-tune ./cmd/subwave-tune
 ./bin/subwave-tune https://radio.example.com
 ```
 
+Windows (PowerShell):
+
+```powershell
+go build -o bin\subwave-tune.exe .\cmd\subwave-tune
+.\bin\subwave-tune.exe https://radio.example.com
+```
+
 For a local default SUB/WAVE installation:
 
 ```bash
 ./bin/subwave-tune
+```
+
+```powershell
+.\bin\subwave-tune.exe
 ```
 
 The default station URL is `http://localhost:7700`. A positional URL,
@@ -45,8 +59,10 @@ stream connection instead of resuming stale buffered radio.
 
 ## Configuration
 
-The optional configuration file is
-`~/.config/subwave-tune/config.json` on Linux:
+The optional configuration file lives at:
+
+- Linux / macOS: `~/.config/subwave-tune/config.json`
+- Windows: `%AppData%\subwave-tune\config.json`
 
 ```json
 {
@@ -55,16 +71,17 @@ The optional configuration file is
 }
 ```
 
-Use `--config /path/to/config.json` to select another file. Environment
-variables override the file:
+Use `--config /path/to/config.json` (or a Windows path) to select another
+file. Environment variables override the file:
 
 - `SUBWAVE_TUNE_URL`
 - `SUBWAVE_TUNE_PASSWORD`
 
-For a station with Icecast listener authentication, put `password` in a
-mode-`0600` configuration file or export `SUBWAVE_TUNE_PASSWORD`. There is
-deliberately no password command-line flag, so it cannot leak into shell
-history or the process list.
+For a station with Icecast listener authentication, put `password` in the
+configuration file or export `SUBWAVE_TUNE_PASSWORD`. On Linux / macOS, prefer
+a mode-`0600` file; on Windows, keep the file under your user profile so
+normal NTFS ACLs limit access. There is deliberately no password command-line
+flag, so it cannot leak into shell history or the process list.
 
 Use `--no-play` to inspect the station without starting audio.
 

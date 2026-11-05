@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -35,7 +32,7 @@ func New(volume int) *MPV {
 
 func Available() error {
 	if _, err := exec.LookPath("mpv"); err != nil {
-		return errors.New("mpv was not found in PATH")
+		return errors.New("mpv (or mpv.exe) was not found in PATH")
 	}
 	return nil
 }
@@ -49,8 +46,8 @@ func (m *MPV) Start(streamURL string) error {
 		m.mu.Unlock()
 		return nil
 	}
-	socket := filepath.Join(os.TempDir(), fmt.Sprintf("subwave-tune-%d.sock", os.Getpid()))
-	_ = os.Remove(socket)
+	socket := ipcPath()
+	cleanupIPC(socket)
 	command := exec.Command(
 		"mpv",
 		"--no-video",
@@ -79,12 +76,13 @@ func (m *MPV) Start(streamURL string) error {
 	go func() {
 		done <- command.Wait()
 		close(done)
-		_ = os.Remove(socket)
+		cleanupIPC(socket)
 	}()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socket); err == nil {
+		if connection, err := dialIPC(socket, 100*time.Millisecond); err == nil {
+			_ = connection.Close()
 			return nil
 		}
 		select {
@@ -130,7 +128,7 @@ func (m *MPV) Stop() {
 		m.socket = ""
 	}
 	m.mu.Unlock()
-	_ = os.Remove(socket)
+	cleanupIPC(socket)
 }
 
 func (m *MPV) Toggle(streamURL string) (bool, error) {
@@ -195,7 +193,7 @@ func (m *MPV) runningLocked() bool {
 }
 
 func send(socket string, command []any) error {
-	connection, err := net.DialTimeout("unix", socket, 400*time.Millisecond)
+	connection, err := dialIPC(socket, 400*time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("connect to mpv: %w", err)
 	}
